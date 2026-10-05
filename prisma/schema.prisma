@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. TENANT & HR USER (STRICTLY HR ROLE)
+// ==========================================
+
+model Company {
+  id                String             @id @default(cuid())
+  name              String
+  domain            String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  users             User[]
+  candidateProfiles CandidateProfile[]
+  jobOpenings       JobOpening[]
+}
+
+model User {
+  id                String              @id @default(cuid())
+  email             String              @unique
+  passwordHash      String
+  name              String
+  role              String              @default("HR") // Strictly HR
+  companyId         String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  notes             InterviewNote[]
+  schedules         InterviewSchedule[]
+
+  @@index([companyId])
+}
+
+// ==========================================
+// 2. CANDIDATE DATABASE & PROFILES
+// ==========================================
+
+model CandidateProfile {
+  id                String              @id @default(cuid())
+  name              String
+  email             String
+  phone             String?
+  location          String
+  headline          String
+  experienceYears   Float               @default(0)
+  skills            String              @default("[]") // JSON string array
+  resumeUrl         String?
+  verifiedSkills    String              @default("[]") // JSON string array
+  aiInferredSkills  String              @default("[]") // JSON string array
+  aiMatchScore      Float               @default(0)
+  status            String              @default("NEW") // NEW, AI_SCREENED, READY_FOR_HR_REVIEW, HR_SCHEDULED, OFFERED, REJECTED
+  gmeetLink         String?             // Dynamic Google Meet link
+  companyId         String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mockInterviews    MockInterview[]
+  schedules         InterviewSchedule[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([experienceYears])
+}
+
+// ==========================================
+// 3. JOB OPENINGS
+// ==========================================
+
+model JobOpening {
+  id                String              @id @default(cuid())
+  title             String
+  department        String
+  minExp            Int                 @default(0)
+  requiredSkills    String              @default("[]") // JSON string array
+  preferredSkills   String              @default("[]") // JSON string array
+  salaryRange       String
+  description       String
+  activeStatus      Boolean             @default(true)
+  companyId         String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([activeStatus])
+}
+
+// ==========================================
+// 4. AI VIDEO INTERVIEW REVIEWS
+// ==========================================
+
+model MockInterview {
+  id                  String           @id @default(cuid())
+  candidateId         String
+  videoUrl            String
+  transcript          String           // JSON string of questions, answers, and timestamps
+  overallScore        Float            @default(0)
+  techScore           Float            @default(0)
+  commScore           Float            @default(0)
+  leadershipScore     Float            @default(0)
+  problemSolvingScore Float            @default(0)
+  status              String           @default("READY_FOR_HR_REVIEW") // PROCESSING, READY_FOR_HR_REVIEW, REVIEWED
+  completedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  candidate           CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  notes               InterviewNote[]
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ==========================================
+// 5. HR TIMESTAMPED NOTES
+// ==========================================
+
+model InterviewNote {
+  id                  String           @id @default(cuid())
+  interviewId         String
+  timestampSeconds    Int
+  noteText            String
+  authorId            String
+  createdAt           DateTime         @default(now())
+
+  interview           MockInterview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  author              User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@index([authorId])
+}
+
+// ==========================================
+// 6. HR INTERVIEW SCHEDULE & GOOGLE MEET
+// ==========================================
+
+model InterviewSchedule {
+  id                  String           @id @default(cuid())
+  candidateId         String
+  hrUserId            String
+  scheduledAt         DateTime
+  durationMinutes     Int              @default(45)
+  gmeetLink           String?
+  status              String           @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  candidate           CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  hrUser              User             @relation(fields: [hrUserId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([hrUserId])
+  @@index([status])
+}
